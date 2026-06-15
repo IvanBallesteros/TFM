@@ -1,7 +1,7 @@
 from PIL import Image
 from pathlib import Path
 
-proj = Path(r"C:\Users\ibf\Desktop\TFM\Nou projecte")
+proj = Path(r"C:\Users\ibf\Desktop\TFM\Nou_projecte")
 val = proj / "VAL"
 
 # find first image under VAL (recursively)
