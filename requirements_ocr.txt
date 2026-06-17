@@ -1,8 +1,0 @@
-pytesseract
-pillow
-scikit-learn
-joblib
-pandas
-tqdm
-numpy
-cv2
