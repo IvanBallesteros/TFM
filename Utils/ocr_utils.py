@@ -38,7 +38,7 @@ from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
 from sklearn.svm import SVC
 
-from TFM.Model_Notebooks.ocr_utils import *
+from TFM.Utils.ocr_utils import *
 
 ###############################################################
 ######################## OCR MODEL UTILS ######################
