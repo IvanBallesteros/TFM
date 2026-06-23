@@ -265,8 +265,6 @@ def clean_for_bert(text):
 
     text = text.lower()
     text = remove_numbers_and_symbols_2(text)
-
-    # Fix spacing only
     text = re.sub(r"\s+", " ", text).strip()
     
     raw_tokens = text.split()
