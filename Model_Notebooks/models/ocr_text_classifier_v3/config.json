@@ -1,0 +1,6 @@
+{
+  "embedding_model_name": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+  "threshold": 0.9,
+  "model_type": "SVC",
+  "probability": true
+}
