@@ -11,7 +11,7 @@ import pytesseract
 import cv2
 from pathlib import Path
 from PIL import Image
-from joblib import dump, load
+from joblib import *
 from tqdm import tqdm
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
@@ -336,7 +336,7 @@ def extract_text_from_image(path, crop_top=120, crop_bottom=120):
         print(f'OCR failed for {path}: {exc}')
         return ''
 
-def build_ocr_dataframe(root_dir, split_name):
+def build_ocr_dataframe(root_dir, split_name): # NOT USED
     classes, samples = collect_samples(root_dir)
     records = []
 
@@ -385,3 +385,106 @@ def build_ocr_dataframe_from_samples(samples, class_names, split_name):
           int((df['text'].fillna('').str.strip() == '').sum()))
 
     return df
+
+
+def evaluate_predictions(y_true, y_pred):
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
+
+    # Mask to exclude "Indeterminado" if needed for standard metrics?
+    # (optional depending on how you want to treat it)
+    
+    accuracy = accuracy_score(y_true, y_pred)
+    balanced_acc = balanced_accuracy_score(y_true, y_pred)
+    macro_f1 = f1_score(y_true, y_pred, average='macro', zero_division=0)
+    weighted_f1 = f1_score(y_true, y_pred, average='weighted', zero_division=0)
+
+    # % of uncertain predictions
+    uncertain_rate = np.mean(y_pred == "Indeterminado")
+
+    return {
+        "accuracy": accuracy,
+        "balanced_accuracy": balanced_acc,
+        "macro_f1": macro_f1,
+        "weighted_f1": weighted_f1,
+        "uncertain_rate": uncertain_rate
+    }
+
+
+
+def predict_with_threshold(probas, classes, threshold):
+    predictions = []
+
+    for prob in probas:
+        max_idx = np.argmax(prob)
+        max_prob = prob[max_idx]
+        predicted_class = classes[max_idx]
+
+        if max_prob < threshold:
+            predictions.append("Indeterminado")
+        else:
+            predictions.append(predicted_class)
+
+    return predictions
+
+def predict_with_rules(df, model, clf, threshold):
+    texts = df['text']
+    
+    # Compute embeddings for ALL samples
+    embeddings = model.encode(texts.tolist(), show_progress_bar=True)
+
+    probas = clf.predict_proba(embeddings)
+    classes = clf.classes_
+
+    predictions = []
+
+    for i, text in enumerate(texts):
+        text = text.strip()
+
+        # ✅ Rule 1: Empty OCR
+        if text == "":
+            predictions.append("Empty")
+            continue
+
+        # ✅ Rule 2: Threshold for low confidence
+        prob = probas[i]
+        max_idx = np.argmax(prob)
+        max_prob = prob[max_idx]
+        pred_class = classes[max_idx]
+
+        if max_prob < threshold:
+            predictions.append("Indeterminado")
+        else:
+            predictions.append(pred_class)
+
+    return predictions
+
+def predict_with_rules_xgb(df, model, clf, le, threshold):
+    texts = df['text']
+    
+    embeddings = model.encode(texts.tolist(), show_progress_bar=True)
+
+    probas = clf.predict_proba(embeddings)
+
+    classes = le.inverse_transform(clf.classes_)
+
+    predictions = []
+
+    for i, text in enumerate(texts):
+        text = text.strip()
+
+        if text == "":
+            predictions.append("Empty")
+            continue
+
+        prob = probas[i]
+        max_idx = np.argmax(prob)
+        max_prob = prob[max_idx]
+        pred_class = classes[max_idx]
+
+        if max_prob < threshold:
+            predictions.append("Indeterminado")
+        else:
+            predictions.append(pred_class)
+
+    return predictions

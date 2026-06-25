@@ -1,6 +1,6 @@
 {
   "n_train_samples": 4688,
   "n_val_samples": 1172,
-  "embedding_dim": 3674,
+  "embedding_dim": 384,
   "num_classes": 8
 }
