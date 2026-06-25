@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-
+from PIL import Image
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -152,3 +152,166 @@ class CustomCNN(nn.Module):
         x = x.view(x.size(0), -1)
         x = self.classifier(x)
         return x
+
+
+def load_model_pipeline(
+    model_dir,
+    class_names_path,
+    model_candidates,
+    model_class,
+    device
+):
+    model_dir = Path(model_dir)
+    class_names_path = Path(class_names_path)
+
+    # -------------------------
+    # Validate class names
+    # -------------------------
+    if not class_names_path.exists():
+        raise FileNotFoundError(
+            f"class_names.json not found at: {class_names_path}"
+        )
+
+    # -------------------------
+    # Resolve model path
+    # -------------------------
+    resolved_model_path = None
+
+    for name in model_candidates:
+        candidate = model_dir / name
+        if candidate.exists():
+            resolved_model_path = candidate
+            break
+
+    if resolved_model_path is None:
+        raise FileNotFoundError(
+            f"No model checkpoint found in {model_dir}. Checked: {model_candidates}"
+        )
+
+    # -------------------------
+    # Load class names
+    # -------------------------
+    with open(class_names_path, "r", encoding="utf-8") as f:
+        class_names = json.load(f)
+
+    # -------------------------
+    # Load model
+    # -------------------------
+    model = model_class(num_classes=len(class_names)).to(device)
+
+    state_dict = torch.load(resolved_model_path, map_location=device)
+    model.load_state_dict(state_dict)
+
+    model.eval()
+
+    return model, class_names, resolved_model_path
+
+
+def predict_image_proba(
+    image_path,
+    model,
+    class_names,
+    inference_transform,
+    device
+):
+    image_path = Path(image_path)
+
+    if not image_path.exists():
+        raise FileNotFoundError(f"Image not found at: {image_path}")
+
+    # Load image
+    image = Image.open(image_path).convert("RGB")
+
+    # Preprocess
+    input_tensor = inference_transform(image).unsqueeze(0).to(device)
+
+    # Forward pass
+    with torch.no_grad():
+        logits = model(input_tensor)
+        probs = torch.softmax(logits, dim=1).squeeze(0).cpu()
+
+    # Build output
+    results = [
+        {
+            "class": class_names[i],
+            "confidence": float(probs[i].item())
+        }
+        for i in range(len(class_names))
+    ]
+
+    # Sort by confidence (optional but useful)
+    results = sorted(results, key=lambda x: x["confidence"], reverse=True)
+
+    return results
+
+from torchvision import transforms
+
+def safe_mobile_border_crop(img, border_crop):
+    crop_margin = min(border_crop, max((img.height - 1) // 2, 0))
+    return img.crop((0, crop_margin, img.width, img.height - crop_margin))
+
+def get_transforms(image_size, border_crop):
+    
+    base_transform = transforms.Compose([
+        transforms.Lambda(lambda img: safe_mobile_border_crop(img, border_crop)),
+        transforms.RandomApply([
+            transforms.ColorJitter(
+                brightness=0.10,
+                contrast=0.10,
+                saturation=0.05,
+                hue=0.02,
+            ),
+        ], p=0.35),
+        transforms.RandomApply([
+            transforms.RandomAffine(
+                degrees=0,
+                translate=(0.03, 0.03),
+                shear=3,
+                fill=(255, 255, 255),
+            ),
+        ], p=0.35),
+        transforms.Resize(image_size),
+        transforms.ToTensor(),
+        transforms.Normalize(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225],
+        ),
+    ])
+
+    minority_transform = transforms.Compose([
+        transforms.Lambda(lambda img: safe_mobile_border_crop(img, border_crop)),
+        transforms.RandomApply([
+            transforms.ColorJitter(
+                brightness=0.15,
+                contrast=0.15,
+                saturation=0.08,
+                hue=0.03,
+            ),
+        ], p=0.5),
+        transforms.RandomApply([
+            transforms.RandomAffine(
+                degrees=0,
+                translate=(0.05, 0.05),
+                shear=4,
+                fill=(255, 255, 255),
+            ),
+        ], p=0.5),
+        transforms.Resize(image_size),
+        transforms.ToTensor(),
+        transforms.Normalize(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225],
+        ),
+    ])
+
+    val_transform = transforms.Compose([
+        transforms.Lambda(lambda img: safe_mobile_border_crop(img, border_crop)),
+        transforms.Resize(image_size),
+        transforms.ToTensor(),
+        transforms.Normalize(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225],
+        ),
+    ])
+
+    return base_transform, minority_transform, val_transform

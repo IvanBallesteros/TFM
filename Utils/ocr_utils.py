@@ -488,3 +488,110 @@ def predict_with_rules_xgb(df, model, clf, le, threshold):
             predictions.append(pred_class)
 
     return predictions
+
+
+
+def predict_text(image_path, model, clf, threshold):
+    # OCR
+    raw_text = extract_text_from_image(image_path)
+
+    # Same cleaning as training
+    clean_text = clean_for_bert(raw_text)
+
+    # Rule 1: Empty OCR
+    if clean_text.strip() == "":
+        return {
+            "prediction": "Empty",
+            "confidence": 0.0,
+            "raw_text": raw_text,
+            "clean_text": clean_text
+        }
+
+    # Embedding
+    embedding = model.encode([clean_text])
+
+    # Probabilities
+    prob = clf.predict_proba(embedding)[0]
+
+    max_idx = np.argmax(prob)
+    max_prob = float(prob[max_idx])
+
+    # Predicted class
+    pred_class = clf.classes_[max_idx]
+
+    # Rule 2: Low confidence
+    if max_prob < threshold:
+        pred_class = "Indeterminado"
+
+    return {
+        "prediction": pred_class,
+        "confidence": max_prob,
+        "raw_text": raw_text,
+        "clean_text": clean_text
+    }
+
+
+def predict_text_proba(image_path, model, clf):
+    # OCR
+    raw_text = extract_text_from_image(image_path)
+    
+    if not raw_text.strip():
+        return {
+            "prediction": "Empty",
+            "confidence": 1.0,
+            "probabilities": [
+                {"class": "Empty", "confidence": 1.0}
+            ],
+            "raw_text": raw_text,
+            "clean_text": ""
+        }
+
+    # Clean text
+    clean_text = clean_for_bert(raw_text)
+
+    if not clean_text.strip():
+        return {
+            "prediction": "Empty",
+            "confidence": 1.0,
+            "probabilities": [
+                {"class": "Empty", "confidence": 1.0}
+            ],
+            "raw_text": raw_text,
+            "clean_text": ""
+        }
+
+    # Clean text
+    clean_text = clean_for_bert(raw_text)
+
+    if not clean_text.strip():
+        return {
+            "prediction": "Empty",
+            "probabilities": []
+        }
+
+    # Embedding
+    embedding = model.encode([clean_text])
+
+    # Probabilities
+    probs = clf.predict_proba(embedding)[0]
+    classes = clf.classes_
+
+    # Build structured output
+    results = [
+        {
+            "class": classes[i],
+            "confidence": float(probs[i])
+        }
+        for i in range(len(classes))
+    ]
+
+    # Sort descending (like CNN version)
+    results = sorted(results, key=lambda x: x["confidence"], reverse=True)
+
+    return {
+        "prediction": results[0]["class"],
+        "confidence": results[0]["confidence"],
+        "probabilities": results,
+        "raw_text": raw_text,
+        "clean_text": clean_text
+    }
