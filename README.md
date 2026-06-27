@@ -26,6 +26,9 @@ These notebooks make use of shared utility functions located in the `Utils/` fol
 ### `Utils/`
 Includes helper functions and reusable components used across the notebooks.
 
+### `Data_records/`
+Contains the CSV files from the text extraction process, showing the OCR raw text extraction and the final text filtered and ready to be embedded. There is text for the train and validation sets.
+
 ### `Inference/`
 Contains notebooks for:
 - Running inference on each model independently  
