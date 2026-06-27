@@ -400,7 +400,7 @@ def evaluate_predictions(y_true, y_pred):
     weighted_f1 = f1_score(y_true, y_pred, average='weighted', zero_division=0)
 
     # % of uncertain predictions
-    uncertain_rate = np.mean(y_pred == "Indeterminado")
+    uncertain_rate = np.mean(y_pred == "Uncertain")
 
     return {
         "accuracy": accuracy,
